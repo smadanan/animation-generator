@@ -5,6 +5,10 @@ services:
     rootDir: backend
     dockerfilePath: ./Dockerfile
     plan: starter
+    disk:
+      name: chai-animation-data
+      mountPath: /var/data
+      sizeGB: 1
     healthCheckPath: /health
     envVars:
       - key: ANTHROPIC_API_KEY
@@ -12,7 +16,9 @@ services:
       - key: HF_TOKEN
         sync: false
       - key: DATA_DIR
-        value: /tmp/chai-animation-data
+        value: /var/data/chai-animation-data
+      - key: WHISPER_MODEL
+        value: base
       - key: CORS_ORIGINS
         value: https://chai-animation-studio.onrender.com
 
