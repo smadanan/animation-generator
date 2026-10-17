@@ -186,7 +186,7 @@ def run_analysis(job_id: str):
         job["progress"] = 25
         job["note"] = "Loading speech recognition model. The first run may take longer while model files are prepared."
         persist_job(job)
-        model_name = os.getenv("WHISPER_MODEL", "tiny")
+        model_name = os.getenv("WHISPER_MODEL", "small")
         model = WhisperModel(
             model_name,
             device=os.getenv("WHISPER_DEVICE", "cpu"),
