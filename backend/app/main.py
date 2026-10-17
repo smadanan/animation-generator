@@ -51,10 +51,10 @@ def persist_job(job: dict[str, Any]) -> None:
     if job.get("status") == "analyzing":
         if "loading" in note or "model" in note:
             job["stage"] = "loading_model"
-        elif "transcrib" in note:
-            job["stage"] = "transcribing"
         elif "speaker" in note or "diariz" in note:
             job["stage"] = "identifying_speakers"
+        elif "transcrib" in note:
+            job["stage"] = "transcribing"
         elif "claude" in note or "scene" in note:
             job["stage"] = "scene_analysis"
     elif job.get("status") == "rendering":
