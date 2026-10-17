@@ -181,51 +181,83 @@ def run_analysis(job_id: str):
     if not job:
         return
     try:
-        from faster_whisper import WhisperModel
+        import assemblyai as aai
 
+        api_key = os.getenv("ASSEMBLYAI_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "ASSEMBLYAI_API_KEY is missing. Add it to the creators-animation-api "
+                "service environment variables in Render, then redeploy."
+            )
+
+        aai.settings.api_key = api_key
         job["progress"] = 25
-        job["note"] = "Loading speech recognition model. The first run may take longer while model files are prepared."
+        job["note"] = "Sending audio securely to AssemblyAI for online transcription and speaker separation."
         persist_job(job)
-        model_name = os.getenv("WHISPER_MODEL", "small")
-        model = WhisperModel(
-            model_name,
-            device=os.getenv("WHISPER_DEVICE", "cpu"),
-            compute_type=os.getenv("WHISPER_COMPUTE_TYPE", "int8"),
-            download_root=str(ROOT / "models"),
+
+        config = aai.TranscriptionConfig(
+            speech_models=["universal-2"],
+            language_detection=True,
+            speaker_labels=True,
         )
-        job["progress"] = 35
-        job["note"] = f"Transcribing audio with the {model_name} model. The next progress update appears when speech segments are decoded; longer clips can take a while."
+        transcript = aai.Transcriber().transcribe(job["audio"], config=config)
+        if transcript.status == aai.TranscriptStatus.error:
+            raise RuntimeError(f"AssemblyAI transcription failed: {transcript.error}")
+
+        job["progress"] = 50
+        job["note"] = "Transcription complete. Preparing timestamped dialogue and speaker labels."
         persist_job(job)
-        segments, info = model.transcribe(
-            job["audio"], word_timestamps=True, vad_filter=True, beam_size=1
-        )
+
         timeline = []
-        last_saved_count = 0
-        for seg in segments:
+        speaker_ids: dict[str, str] = {}
+        utterances = transcript.utterances or []
+        for utterance in utterances:
+            source_speaker = str(utterance.speaker or "UNKNOWN")
+            if source_speaker not in speaker_ids:
+                speaker_ids[source_speaker] = f"SPEAKER_{len(speaker_ids):02d}"
+            words = []
+            for word in (utterance.words or []):
+                start_ms = getattr(word, "start", None)
+                end_ms = getattr(word, "end", None)
+                word_text = getattr(word, "text", None)
+                if start_ms is not None and end_ms is not None and word_text:
+                    words.append({
+                        "start": round(float(start_ms) / 1000, 3),
+                        "end": round(float(end_ms) / 1000, 3),
+                        "word": str(word_text),
+                    })
+            start_ms = getattr(utterance, "start", 0) or 0
+            end_ms = getattr(utterance, "end", start_ms) or start_ms
             timeline.append({
-                "start": round(float(seg.start), 3),
-                "end": round(float(seg.end), 3),
-                "text": seg.text.strip(),
-                "speaker": "UNKNOWN",
-                "words": [
-                    {"start": round(float(w.start), 3), "end": round(float(w.end), 3), "word": w.word}
-                    for w in (seg.words or []) if w.start is not None and w.end is not None
-                ],
+                "start": round(float(start_ms) / 1000, 3),
+                "end": round(float(end_ms) / 1000, 3),
+                "text": str(utterance.text or "").strip(),
+                "speaker": speaker_ids[source_speaker],
+                "words": words,
             })
-            # Save incremental progress so the UI does not appear frozen on longer audio.
-            if len(timeline) - last_saved_count >= 5:
-                job["timeline"] = timeline
-                job["progress"] = min(54, 35 + len(timeline))
-                job["note"] = f"Transcribing audio: {len(timeline)} segments processed."
-                persist_job(job)
-                last_saved_count = len(timeline)
+
+        # Some audio may not produce utterance objects; retain a usable transcript fallback.
+        if not timeline and transcript.text:
+            timeline.append({
+                "start": 0.0,
+                "end": round(float(getattr(transcript, "audio_duration", 0) or 0), 3),
+                "text": transcript.text.strip(),
+                "speaker": "UNKNOWN",
+                "words": [],
+            })
+
         job["timeline"] = timeline
-        job["language"] = getattr(info, "language", None)
-        job["duration"] = round(max((x["end"] for x in timeline), default=0), 2)
+        job["language"] = str(getattr(transcript, "language_code", "") or "") or None
+        job["duration"] = round(max((item["end"] for item in timeline), default=0), 2)
+        job["speaker_map"] = {
+            speaker_id: ("Character A" if i == 0 else "Character B" if i == 1 else f"Extra speaker {i+1}")
+            for i, speaker_id in enumerate(speaker_ids.values())
+        } or {"SPEAKER_00": "Character A", "SPEAKER_01": "Character B"}
         job["progress"] = 55
-        job["note"] = f"Transcription complete ({len(timeline)} segments). Checking speakers."
+        job["note"] = f"AssemblyAI transcription complete ({len(timeline)} dialogue segments). Speaker labels are ready to review."
         persist_job(job)
-        diarize_audio(job_id)
+
+        # AssemblyAI already performed speaker diarization; no local Whisper or pyannote model is needed.
         analyze_with_claude(job_id)
         job["status"] = "ready_for_review"
         job["progress"] = 65
@@ -234,7 +266,7 @@ def run_analysis(job_id: str):
     except Exception as exc:
         job["status"] = "error"
         job["error"] = str(exc)
-        job["note"] = "Analysis failed. Check server logs and required API keys."
+        job["note"] = "Analysis failed. Check the AssemblyAI API key and server logs, then retry."
         persist_job(job)
         print(f"Analysis failed for job {job_id}: {exc}", flush=True)
 
