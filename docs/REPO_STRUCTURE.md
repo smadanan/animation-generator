@@ -37,7 +37,7 @@ creators-animation-studio/             # GitHub repository root
 
 ## Before pushing to GitHub
 
-1. Create an **empty private** repository named `chai-animation-studio`.
+1. Use the existing repository `smadanan/animation-generator`; the product name does not need to match the repository slug.
 2. Extract this ZIP on a computer if possible.
 3. Open the extracted `creators-animation-studio` folder and upload its *contents* (the items shown above) to the repository root.
 4. Do not upload `backend/.env`, API keys, `node_modules/`, `.next/`, Python cache files, or generated videos.

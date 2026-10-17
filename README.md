@@ -61,7 +61,7 @@ The first speech-model download may take time and use substantial memory. Start 
 
 ## GitHub setup
 
-1. Create a **private, empty** repository named `chai-animation-studio` at https://github.com/new. Do not initialize it with a README or licence, because this project already has files.
+1. Use the existing repository `smadanan/animation-generator`. Do not create a second repository just to change the product name.
 2. Upload the project contents to the repository root, or use Git from the extracted folder:
 
    ```bash
@@ -69,7 +69,7 @@ The first speech-model download may take time and use substantial memory. Start 
    git add .
    git commit -m "Initial Creators Animation Studio MVP"
    git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/chai-animation-studio.git
+   git remote add origin https://github.com/smadanan/animation-generator.git
    git push -u origin main
    ```
 
