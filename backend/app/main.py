@@ -176,6 +176,7 @@ def run_analysis(job_id: str):
             job["audio"], word_timestamps=True, vad_filter=True, beam_size=1
         )
         timeline = []
+        last_saved_count = 0
         for seg in segments:
             timeline.append({
                 "start": round(float(seg.start), 3),
@@ -187,11 +188,18 @@ def run_analysis(job_id: str):
                     for w in (seg.words or []) if w.start is not None and w.end is not None
                 ],
             })
+            # Save incremental progress so the UI does not appear frozen on longer audio.
+            if len(timeline) - last_saved_count >= 5:
+                job["timeline"] = timeline
+                job["progress"] = min(54, 35 + len(timeline))
+                job["note"] = f"Transcribing audio: {len(timeline)} segments processed."
+                persist_job(job)
+                last_saved_count = len(timeline)
         job["timeline"] = timeline
         job["language"] = getattr(info, "language", None)
         job["duration"] = round(max((x["end"] for x in timeline), default=0), 2)
         job["progress"] = 55
-        job["note"] = "Transcription complete. Checking speakers."
+        job["note"] = f"Transcription complete ({len(timeline)} segments). Checking speakers."
         persist_job(job)
         diarize_audio(job_id)
         analyze_with_claude(job_id)
