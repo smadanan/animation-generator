@@ -324,11 +324,11 @@ def analyze_with_claude(job_id: str):
             "summary (string), characters (array of objects with speaker_id, suggested_role, voice_cues, confidence), "
             "scenes (array of objects with start, end, active_speaker, listener, expression, camera). "
             "Do not change dialogue or infer political identity without evidence. If a speaker label is UNKNOWN, "
-            "say so rather than guessing. Use concise scene boundaries and preserve timestamps. Transcript JSON:\n"
+            "say so rather than guessing. Use concise scene boundaries and preserve timestamps. Transcript JSON:\\n"
             + json.dumps(sample, ensure_ascii=False)
         )
         response = client.messages.create(
-            model=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514"),
+            model=os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6"),
             max_tokens=3500,
             messages=[{"role": "user", "content": prompt}],
         )
