@@ -116,7 +116,7 @@ def health():
 
 
 @app.post("/api/jobs")
-async def create_job(reference_image: UploadFile = File(...), audio: UploadFile = File(...)):
+async def create_job(background: BackgroundTasks, reference_image: UploadFile = File(...), audio: UploadFile = File(...)):
     job_id = uuid.uuid4().hex[:12]
     folder = ROOT / job_id
     folder.mkdir(parents=True)
@@ -130,18 +130,19 @@ async def create_job(reference_image: UploadFile = File(...), audio: UploadFile 
         raise
     job = {
         "id": job_id,
-        "status": "uploaded",
-        "progress": 10,
+        "status": "analyzing",
+        "progress": 20,
         "reference_image": str(image_path),
         "audio": str(audio_path),
         "speaker_map": {"SPEAKER_00": "Character A", "SPEAKER_01": "Character B"},
         "timeline": [],
         "result_url": None,
         "error": None,
-        "note": "Files uploaded. Start analysis to transcribe and identify speakers.",
+        "note": "Files uploaded. Starting transcription and speaker analysis automatically.",
     }
     JOBS[job_id] = job
     persist_job(job)
+    background.add_task(run_analysis, job_id)
     return public_job(job)
 
 
@@ -163,6 +164,8 @@ def analyze_job(job_id: str, background: BackgroundTasks):
     if not job:
         raise HTTPException(404, "Job not found")
     if job["status"] in {"analyzing", "rendering"}:
+        return public_job(job)
+    if job.get("timeline") and job["status"] == "ready_for_review":
         return public_job(job)
     job["status"] = "analyzing"
     job["progress"] = 20
@@ -191,7 +194,7 @@ def run_analysis(job_id: str):
             download_root=str(ROOT / "models"),
         )
         job["progress"] = 35
-        job["note"] = f"Transcribing audio with the {model_name} model. Progress updates will appear as speech segments are processed."
+        job["note"] = f"Transcribing audio with the {model_name} model. The next progress update appears when speech segments are decoded; longer clips can take a while."
         persist_job(job)
         segments, info = model.transcribe(
             job["audio"], word_timestamps=True, vad_filter=True, beam_size=1
