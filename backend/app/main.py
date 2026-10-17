@@ -165,12 +165,20 @@ def analyze_job(job_id: str, background: BackgroundTasks):
         raise HTTPException(404, "Job not found")
     if job["status"] in {"analyzing", "rendering"}:
         return public_job(job)
-    if job.get("timeline") and job["status"] == "ready_for_review":
+    if job.get("timeline"):
+        # Reuse the saved transcript: retry Claude only, not paid transcription.
+        job["status"] = "analyzing"
+        job["progress"] = 60
+        job["error"] = None
+        job["claude_note"] = None
+        job["note"] = "Retrying scene analysis using the saved transcript."
+        persist_job(job)
+        background.add_task(retry_claude_analysis, job_id)
         return public_job(job)
     job["status"] = "analyzing"
     job["progress"] = 20
     job["error"] = None
-    job["note"] = "Loading speech recognition model and transcribing audio."
+    job["note"] = "Starting audio transcription and speaker analysis."
     persist_job(job)
     background.add_task(run_analysis, job_id)
     return public_job(job)
@@ -261,7 +269,10 @@ def run_analysis(job_id: str):
         analyze_with_claude(job_id)
         job["status"] = "ready_for_review"
         job["progress"] = 65
-        job["note"] = "Transcript prepared. Review speaker assignments before rendering."
+        if str(job.get("claude_note", "")).startswith("Claude analysis failed"):
+            job["note"] = "Transcript prepared. Review speaker assignments; scene analysis failed and can be retried."
+        else:
+            job["note"] = "Transcript prepared. Review speaker assignments before rendering."
         persist_job(job)
     except Exception as exc:
         job["status"] = "error"
@@ -269,6 +280,32 @@ def run_analysis(job_id: str):
         job["note"] = "Analysis failed. Check the AssemblyAI API key and server logs, then retry."
         persist_job(job)
         print(f"Analysis failed for job {job_id}: {exc}", flush=True)
+
+
+def retry_claude_analysis(job_id: str):
+    """Retry semantic scene analysis using the saved transcript without retranscribing audio."""
+    job = JOBS.get(job_id)
+    if not job or not job.get("timeline"):
+        return
+    try:
+        job["progress"] = 62
+        job["note"] = "Analyzing dialogue and planning scenes with Claude."
+        persist_job(job)
+        analyze_with_claude(job_id)
+        job["status"] = "ready_for_review"
+        job["progress"] = 65
+        if str(job.get("claude_note", "")).startswith("Claude analysis failed"):
+            job["note"] = "Transcript is safe. Scene analysis failed again; check the Claude model/key configuration and logs."
+        else:
+            job["note"] = "Scene analysis complete. Review speaker assignments before rendering."
+        persist_job(job)
+    except Exception as exc:
+        job["status"] = "ready_for_review"
+        job["progress"] = 65
+        job["claude_note"] = f"Claude analysis failed: {exc}"
+        job["note"] = "Transcript is safe. Scene analysis failed; you can retry without retranscribing."
+        persist_job(job)
+        print(f"Claude retry failed for job {job_id}: {exc}", flush=True)
 
 
 def diarize_audio(job_id: str):
