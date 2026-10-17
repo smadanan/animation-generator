@@ -268,13 +268,24 @@ def run_analysis(job_id: str):
                 "words": [],
             })
 
-        # Keep the first complete utterance boundary at or after the requested target,
-        # rather than cutting a speaker off at an exact second.
+        # Stop at a complete speaking turn. If the target lands inside an utterance,
+        # include that whole utterance; if it lands in a pause, stop at the last
+        # completed utterance instead of unexpectedly adding another turn.
         if requested_limit and timeline:
             target = float(requested_limit)
-            boundary = next((item["end"] for item in timeline if item["end"] >= target), None)
-            if boundary is None:
-                boundary = max((item["end"] for item in timeline), default=target)
+            active_utterance = next(
+                (item for item in timeline if item["start"] <= target < item["end"]),
+                None,
+            )
+            if active_utterance:
+                boundary = active_utterance["end"]
+            else:
+                completed_utterances = [item for item in timeline if item["end"] <= target]
+                boundary = (
+                    completed_utterances[-1]["end"]
+                    if completed_utterances
+                    else timeline[0]["end"]
+                )
             timeline = [item for item in timeline if item["start"] < boundary]
             job["selected_end_seconds"] = round(boundary, 3)
         else:
