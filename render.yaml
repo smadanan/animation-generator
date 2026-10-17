@@ -18,7 +18,7 @@ services:
       - key: DATA_DIR
         value: /var/data/chai-animation-data
       - key: WHISPER_MODEL
-        value: tiny
+        value: small
       - key: CORS_ORIGINS
         value: https://creators-animation-studio.onrender.com
 
