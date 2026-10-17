@@ -116,7 +116,7 @@ def health():
 
 
 @app.post("/api/jobs")
-async def create_job(background: BackgroundTasks, reference_image: UploadFile = File(...), audio: UploadFile = File(...)):
+async def create_job(reference_image: UploadFile = File(...), audio: UploadFile = File(...)):
     job_id = uuid.uuid4().hex[:12]
     folder = ROOT / job_id
     folder.mkdir(parents=True)
@@ -130,19 +130,20 @@ async def create_job(background: BackgroundTasks, reference_image: UploadFile = 
         raise
     job = {
         "id": job_id,
-        "status": "analyzing",
-        "progress": 20,
+        "status": "uploaded",
+        "progress": 5,
         "reference_image": str(image_path),
         "audio": str(audio_path),
         "speaker_map": {"SPEAKER_00": "Character A", "SPEAKER_01": "Character B"},
         "timeline": [],
         "result_url": None,
         "error": None,
-        "note": "Files uploaded. Starting transcription and speaker analysis automatically.",
+        "transcription_limit_seconds": None,
+        "selected_end_seconds": None,
+        "note": "Files uploaded. Choose a transcription duration, then start analysis.",
     }
     JOBS[job_id] = job
     persist_job(job)
-    background.add_task(run_analysis, job_id)
     return public_job(job)
 
 
@@ -158,15 +159,18 @@ def get_job(job_id: str):
     return public_job(job)
 
 
+class AnalyzeRequest(BaseModel):
+    duration_seconds: int | None = None
+
+
 @app.post("/api/jobs/{job_id}/analyze")
-def analyze_job(job_id: str, background: BackgroundTasks):
+def analyze_job(job_id: str, background: BackgroundTasks, request: AnalyzeRequest = AnalyzeRequest()):
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     if job["status"] in {"analyzing", "rendering"}:
         return public_job(job)
     if job.get("timeline"):
-        # Reuse the saved transcript: retry Claude only, not paid transcription.
         job["status"] = "analyzing"
         job["progress"] = 60
         job["error"] = None
@@ -175,6 +179,10 @@ def analyze_job(job_id: str, background: BackgroundTasks):
         persist_job(job)
         background.add_task(retry_claude_analysis, job_id)
         return public_job(job)
+    if request.duration_seconds not in {None, 10, 30, 60}:
+        raise HTTPException(400, "Duration must be 10, 30, 60 seconds, or full audio.")
+    job["transcription_limit_seconds"] = request.duration_seconds
+    job["selected_end_seconds"] = None
     job["status"] = "analyzing"
     job["progress"] = 20
     job["error"] = None
@@ -203,11 +211,17 @@ def run_analysis(job_id: str):
         job["note"] = "Sending audio securely to AssemblyAI for online transcription and speaker separation."
         persist_job(job)
 
-        config = aai.TranscriptionConfig(
-            speech_models=["universal-2"],
-            language_detection=True,
-            speaker_labels=True,
-        )
+        # Request a buffer beyond the target so the final speaking turn can finish.
+        # The original uploaded audio is never modified.
+        requested_limit = job.get("transcription_limit_seconds")
+        config_options = {
+            "speech_models": ["universal-2"],
+            "language_detection": True,
+            "speaker_labels": True,
+        }
+        if requested_limit:
+            config_options["audio_end_at"] = int((requested_limit + 30) * 1000)
+        config = aai.TranscriptionConfig(**config_options)
         transcript = aai.Transcriber().transcribe(job["audio"], config=config)
         if transcript.status == aai.TranscriptStatus.error:
             raise RuntimeError(f"AssemblyAI transcription failed: {transcript.error}")
@@ -254,6 +268,17 @@ def run_analysis(job_id: str):
                 "words": [],
             })
 
+        # Keep the first complete utterance boundary at or after the requested target,
+        # rather than cutting a speaker off at an exact second.
+        if requested_limit and timeline:
+            target = float(requested_limit)
+            boundary = next((item["end"] for item in timeline if item["end"] >= target), None)
+            if boundary is None:
+                boundary = max((item["end"] for item in timeline), default=target)
+            timeline = [item for item in timeline if item["start"] < boundary]
+            job["selected_end_seconds"] = round(boundary, 3)
+        else:
+            job["selected_end_seconds"] = round(max((item["end"] for item in timeline), default=0), 3)
         job["timeline"] = timeline
         job["language"] = str(getattr(transcript, "language_code", "") or "") or None
         job["duration"] = round(max((item["end"] for item in timeline), default=0), 2)
@@ -414,14 +439,20 @@ def render_video(job_id: str):
         return
     try:
         out = ROOT / job_id / "preview.mp4"
+        render_duration = job.get("selected_end_seconds") or job.get("duration")
         cmd = [
             "ffmpeg", "-y", "-loop", "1", "-i", job["reference_image"], "-i", job["audio"],
             "-c:v", "libx264", "-threads", "1", "-tune", "stillimage",
             "-c:a", "aac", "-b:a", "192k",
-            "-pix_fmt", "yuv420p", "-shortest", "-filter_threads", "1", "-vf",
+            "-pix_fmt", "yuv420p", "-shortest",
+        ]
+        if render_duration:
+            cmd.extend(["-t", str(render_duration)])
+        cmd.extend([
+            "-filter_threads", "1", "-vf",
             "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2",
             str(out),
-        ]
+        ])
         # Keep FFmpeg diagnostics on disk instead of buffering all output in RAM.
         log_path = ROOT / job_id / "ffmpeg.log"
         with log_path.open("w", encoding="utf-8") as log_file:
