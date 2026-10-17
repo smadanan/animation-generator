@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 ROOT = Path(os.getenv("DATA_DIR", "/tmp/chai-animation-data"))
 ROOT.mkdir(parents=True, exist_ok=True)
-app = FastAPI(title="Chai Animation Generator API", version="0.2.0")
+app = FastAPI(title="Creators Animation Studio API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
@@ -112,7 +112,7 @@ async def save_upload(upload: UploadFile, destination: Path, allowed: set[str]) 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "chai-animation-generator"}
+    return {"status": "ok", "service": "creators-animation-studio"}
 
 
 @app.post("/api/jobs")

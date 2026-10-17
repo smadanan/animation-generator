@@ -1,4 +1,4 @@
-# Chai Animation Studio
+# Creators Animation Studio
 
 A cloud-oriented starter project for a mobile-friendly web app that accepts a reference image and one mixed dialogue audio file, then analyzes speaker timing and prepares a video preview. The website is intended to be used in Chrome on an iPhone; processing runs on the backend.
 
@@ -11,7 +11,7 @@ This is **Milestone 1: a starter MVP**. It includes the upload UI, backend job e
 See [`docs/REPO_STRUCTURE.md`](docs/REPO_STRUCTURE.md). The important rule is to upload the contents of this folder into the root of your repository, so `backend/`, `frontend/`, `render.yaml`, and `README.md` appear at the top level. Do not upload only the ZIP or create an extra nested folder.
 
 ```text
-chai-animation-studio/
+creators-animation-studio/
 ├── README.md
 ├── .gitignore
 ├── render.yaml
@@ -67,7 +67,7 @@ The first speech-model download may take time and use substantial memory. Start 
    ```bash
    git init
    git add .
-   git commit -m "Initial Chai Animation Studio MVP"
+   git commit -m "Initial Creators Animation Studio MVP"
    git branch -M main
    git remote add origin https://github.com/YOUR_USERNAME/chai-animation-studio.git
    git push -u origin main

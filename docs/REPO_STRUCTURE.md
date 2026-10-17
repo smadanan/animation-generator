@@ -1,9 +1,9 @@
 # GitHub repository structure
 
-Keep the repository root exactly like this. Upload the *contents* of this project folder to the root of the GitHub repository, not the ZIP file and not an extra nested `chai-animation-generator/` folder.
+Keep the repository root exactly like this. Upload the *contents* of this project folder to the root of the GitHub repository, not the ZIP file and not an extra nested `creators-animation-studio/` folder.
 
 ```text
-chai-animation-studio/             # GitHub repository root
+creators-animation-studio/             # GitHub repository root
 ├── .gitignore
 ├── README.md
 ├── docker-compose.yml             # Local development
@@ -39,7 +39,7 @@ chai-animation-studio/             # GitHub repository root
 
 1. Create an **empty private** repository named `chai-animation-studio`.
 2. Extract this ZIP on a computer if possible.
-3. Open the extracted `chai-animation-generator` folder and upload its *contents* (the items shown above) to the repository root.
+3. Open the extracted `creators-animation-studio` folder and upload its *contents* (the items shown above) to the repository root.
 4. Do not upload `backend/.env`, API keys, `node_modules/`, `.next/`, Python cache files, or generated videos.
 5. Confirm `README.md`, `render.yaml`, `backend/`, `frontend/`, `docker-compose.yml`, and `docs/` are visible at the top level.
 
