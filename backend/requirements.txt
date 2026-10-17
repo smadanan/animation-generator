@@ -2,5 +2,4 @@ fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 python-multipart>=0.0.9
 anthropic>=0.40
-faster-whisper>=1.1
-pyannote.audio>=3.3
+assemblyai>=0.40
