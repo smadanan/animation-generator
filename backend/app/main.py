@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -41,7 +42,24 @@ class GenerateRequest(BaseModel):
 
 
 def persist_job(job: dict[str, Any]) -> None:
-    """Atomically save job metadata on DATA_DIR so it survives service restarts."""
+    """Atomically save job metadata and the latest real worker heartbeat."""
+    job["last_updated"] = time.time()
+    note = str(job.get("note", "")).lower()
+    if job.get("status") == "analyzing":
+        if "loading" in note or "model" in note:
+            job["stage"] = "loading_model"
+        elif "transcrib" in note:
+            job["stage"] = "transcribing"
+        elif "speaker" in note or "diariz" in note:
+            job["stage"] = "identifying_speakers"
+        elif "claude" in note or "scene" in note:
+            job["stage"] = "scene_analysis"
+    elif job.get("status") == "rendering":
+        job["stage"] = "rendering"
+    elif job.get("status") == "ready_for_review":
+        job["stage"] = "completed"
+    elif job.get("status") == "error":
+        job["stage"] = "error"
     folder = ROOT / str(job["id"])
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / "job.json"
@@ -160,7 +178,7 @@ def run_analysis(job_id: str):
         from faster_whisper import WhisperModel
 
         job["progress"] = 25
-        job["note"] = "Loading speech recognition model."
+        job["note"] = "Loading speech recognition model. The first run may take longer while model files are prepared."
         persist_job(job)
         model_name = os.getenv("WHISPER_MODEL", "tiny")
         model = WhisperModel(
@@ -170,7 +188,7 @@ def run_analysis(job_id: str):
             download_root=str(ROOT / "models"),
         )
         job["progress"] = 35
-        job["note"] = f"Transcribing audio with the {model_name} model."
+        job["note"] = f"Transcribing audio with the {model_name} model. Progress updates will appear as speech segments are processed."
         persist_job(job)
         segments, info = model.transcribe(
             job["audio"], word_timestamps=True, vad_filter=True, beam_size=1
