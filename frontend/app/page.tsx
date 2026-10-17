@@ -4,12 +4,12 @@ const API = '/backend';
 type Job = { id:string; status:string; progress:number; stage?:string; last_updated?:number; started_at?:number; note?:string; error?:string; timeline?:Array<{start:number;end:number;text:string;speaker:string;character?:string}>; speaker_map?:Record<string,string>; result_url?:string; diarization_note?:string; claude_note?:string; claude_analysis?:unknown };
 export default function Home() {
  const [image,setImage]=useState<File|null>(null), [audio,setAudio]=useState<File|null>(null), [job,setJob]=useState<Job|null>(null), [busy,setBusy]=useState(false), [err,setErr]=useState('');
- const [clock,setClock]=useState(Date.now());
+ const [clock,setClock]=useState(Date.now()), [uploading,setUploading]=useState(false), [uploadStartedAt,setUploadStartedAt]=useState<number|null>(null);
  useEffect(() => {
-  if (!job || !['analyzing', 'rendering'].includes(job.status)) return;
+  if (!uploading && (!job || !['analyzing', 'rendering'].includes(job.status))) return;
   const clockTimer = window.setInterval(() => setClock(Date.now()), 1000);
   return () => window.clearInterval(clockTimer);
- }, [job?.id, job?.status]);
+ }, [job?.id, job?.status, uploading]);
  useEffect(() => {
   if (!job || !['analyzing', 'rendering'].includes(job.status)) return;
   let cancelled = false;
@@ -33,11 +33,12 @@ export default function Home() {
   const timer = window.setInterval(poll, 2500);
   return () => { cancelled = true; window.clearInterval(timer); };
  }, [job?.id, job?.status]);
- async function create(){ if(!image||!audio)return; setBusy(true);setErr('');try{const f=new FormData();f.append('reference_image',image);f.append('audio',audio);const r=await fetch(`${API}/api/jobs`,{method:'POST',body:f});const d=await r.json();if(!r.ok)throw Error(d.detail||'Upload failed');setJob(d);}catch(e){setErr(String(e));}finally{setBusy(false)} }
+ async function create(){ if(!image||!audio||busy)return; setBusy(true);setUploading(true);setUploadStartedAt(Date.now()/1000);setClock(Date.now());setErr('');try{const f=new FormData();f.append('reference_image',image);f.append('audio',audio);const r=await fetch(`${API}/api/jobs`,{method:'POST',body:f});const d=await r.json();if(!r.ok)throw Error(d.detail||'Upload failed');setJob(d);}catch(e){setErr(e instanceof Error?e.message:String(e));}finally{setUploading(false);setBusy(false)} }
  async function action(path:string,body?:unknown,method='POST'){if(!job)return;setBusy(true);setErr('');if(path==='analyze')setJob(current=>current?{...current,status:'analyzing',progress:20,stage:'starting',error:undefined,note:'Starting audio analysis and speaker detection…',started_at:current.started_at||Date.now()/1000}:current);try{const r=await fetch(`${API}/api/jobs/${job.id}/${path}`,{method,headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});const d=await r.json();if(!r.ok)throw Error(d.detail||'Request failed');setJob(d);}catch(e){const message=e instanceof Error?e.message:String(e);setErr(message);if(path==='analyze')setJob(current=>current?{...current,status:'error',error:message,note:'Could not start audio analysis.'}:current);}finally{setBusy(false)} }
  async function refresh(){if(!job)return;const r=await fetch(`${API}/api/jobs/${job.id}`);if(r.ok)setJob(await r.json());}
  return <main className="shell"><header><div className="eyebrow">AI CREATOR WORKSPACE</div><h1>Creator Animation <span>Studio</span></h1><p className="sub">From a reference image and a real conversation to a ready-to-edit debate video.</p></header>
  <section className="panel"><h2>01 · Add your source files</h2><div className="uploads"><label className="drop"><span className="glyph">▧</span><strong>Reference image</strong><small>PNG, JPG or WebP · two characters preferred</small><input type="file" accept="image/*" onChange={e=>setImage(e.target.files?.[0]||null)}/><em>{image?.name||'Choose image'}</em>{image&&<img className="thumb" src={URL.createObjectURL(image)} alt="Reference preview"/>}</label><label className="drop"><span className="glyph">♫</span><strong>Dialogue audio</strong><small>MP3, WAV, M4A, FLAC · max 200 MB</small><input type="file" accept="audio/*" onChange={e=>setAudio(e.target.files?.[0]||null)}/><em>{audio?.name||'Choose audio'}</em></label></div><button disabled={!image||!audio||busy} onClick={create}>{busy&&!job?'Uploading…':'Upload files'}</button></section>
+ {uploading&&<section className="panel" role="status" aria-live="polite"><div className="row"><h2>02 · Generation job</h2><span className="status">uploading</span></div><div className="work-status"><span className="work-spinner" aria-hidden="true"></span><div className="work-copy"><strong>Working on your audio</strong><span>Uploading your audio and reference image to the server…</span><small>Elapsed {Math.floor(Math.max(0,clock/1000-(uploadStartedAt||clock/1000))/60).toString().padStart(2,'0')}:{Math.floor(Math.max(0,clock/1000-(uploadStartedAt||clock/1000))%60).toString().padStart(2,'0')} · Upload in progress</small></div></div><div className="progress" aria-label="Upload in progress"><span style={{width:'8%'}}/></div><p className="muted">Upload started. Analysis status will appear as soon as the server accepts the files.</p></section>}
  {job&&<section className="panel"><div className="row"><h2>02 · Generation job</h2><span className="status">{job.status.replaceAll('_',' ')}</span></div>
  {['analyzing','rendering'].includes(job.status)&&<div className="work-status" role="status" aria-live="polite">
   <span className="work-spinner" aria-hidden="true"></span>
