@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: chai-animation-api
+    name: creators-animation-api
     runtime: docker
     rootDir: backend
     dockerfilePath: ./Dockerfile
@@ -20,10 +20,10 @@ services:
       - key: WHISPER_MODEL
         value: tiny
       - key: CORS_ORIGINS
-        value: https://chai-animation-studio.onrender.com
+        value: https://creators-animation-studio.onrender.com
 
   - type: web
-    name: chai-animation-studio
+    name: creators-animation-studio
     runtime: docker
     rootDir: frontend
     dockerfilePath: ./Dockerfile
@@ -32,5 +32,5 @@ services:
       - key: BACKEND_URL
         fromService:
           type: web
-          name: chai-animation-api
+          name: creators-animation-api
           property: host
