@@ -421,9 +421,22 @@ def render_video(job_id: str):
             "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2",
             str(out),
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        # Keep FFmpeg diagnostics on disk instead of buffering all output in RAM.
+        log_path = ROOT / job_id / "ffmpeg.log"
+        with log_path.open("w", encoding="utf-8") as log_file:
+            proc = subprocess.run(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=log_file,
+                text=True,
+                timeout=600,
+            )
         if proc.returncode != 0:
-            raise RuntimeError(proc.stderr[-2500:])
+            # Read only the tail so a large log cannot create another memory spike.
+            with log_path.open("rb") as log_file:
+                log_file.seek(max(0, log_path.stat().st_size - 2500))
+                error_tail = log_file.read().decode("utf-8", errors="replace")
+            raise RuntimeError(error_tail)
         job["result_url"] = f"/files/{job_id}/preview.mp4"
         job["status"] = "animatic_ready"
         job["progress"] = 100
