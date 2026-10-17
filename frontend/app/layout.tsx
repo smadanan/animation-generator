@@ -3,4 +3,4 @@ import './style.css';
 
 // Keep the Studio page metadata centralized in the root layout.
 export const metadata: Metadata = { title: 'Creators Animation Studio', description: 'Turn two-person dialogue audio into animated debate videos.' };
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }> ) { return <html lang="en"><body>{children}</body></html>; }
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) { return <html lang="en"><body>{children}</body></html>; }
