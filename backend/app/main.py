@@ -43,7 +43,10 @@ class GenerateRequest(BaseModel):
 
 def persist_job(job: dict[str, Any]) -> None:
     """Atomically save job metadata and the latest real worker heartbeat."""
-    job["last_updated"] = time.time()
+    now = time.time()
+    job["last_updated"] = now
+    if job.get("status") in {"analyzing", "rendering"}:
+        job.setdefault("started_at", now)
     note = str(job.get("note", "")).lower()
     if job.get("status") == "analyzing":
         if "loading" in note or "model" in note:
