@@ -416,8 +416,9 @@ def render_video(job_id: str):
         out = ROOT / job_id / "preview.mp4"
         cmd = [
             "ffmpeg", "-y", "-loop", "1", "-i", job["reference_image"], "-i", job["audio"],
-            "-c:v", "libx264", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k",
-            "-pix_fmt", "yuv420p", "-shortest", "-vf",
+            "-c:v", "libx264", "-threads", "1", "-tune", "stillimage",
+            "-c:a", "aac", "-b:a", "192k",
+            "-pix_fmt", "yuv420p", "-shortest", "-filter_threads", "1", "-vf",
             "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2",
             str(out),
         ]
