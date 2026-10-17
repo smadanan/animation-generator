@@ -4,6 +4,7 @@ const API = '/backend';
 type Job = { id:string; status:string; progress:number; stage?:string; last_updated?:number; started_at?:number; note?:string; error?:string; timeline?:Array<{start:number;end:number;text:string;speaker:string;character?:string}>; speaker_map?:Record<string,string>; result_url?:string; diarization_note?:string; claude_note?:string; claude_analysis?:unknown };
 export default function Home() {
  const [image,setImage]=useState<File|null>(null), [audio,setAudio]=useState<File|null>(null), [job,setJob]=useState<Job|null>(null), [busy,setBusy]=useState(false), [err,setErr]=useState('');
+ const [clock,setClock]=useState(Date.now());
  useEffect(() => {
   if (!job || !['analyzing', 'rendering'].includes(job.status)) return;
   const clockTimer = window.setInterval(() => setClock(Date.now()), 1000);
